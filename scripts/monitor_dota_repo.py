@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Monitor a remote git repository and send Telegram notifications when files change.
+Sends each file change as a separate beautiful message with emojis.
 
 Usage:
   - Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID as repository secrets and expose them to the workflow.
@@ -14,6 +15,7 @@ import json
 import re
 import subprocess
 import requests
+import time
 from pathlib import Path
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -70,12 +72,14 @@ def get_version(text):
 
 
 def send_telegram(msg):
+    """Send a single message to Telegram"""
     try:
         requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             data={
                 "chat_id": TELEGRAM_CHAT,
-                "text": msg
+                "text": msg,
+                "parse_mode": "HTML"
             },
             timeout=10
         )
@@ -90,6 +94,22 @@ def ensure_repo_cloned(url, local_dir):
         run(f"git clone {url} {local}")
     else:
         run("git fetch --all --prune", cwd=str(local))
+
+
+def get_file_emoji(filename):
+    """Return appropriate emoji based on file type"""
+    if filename.endswith('.json'):
+        return '📄'
+    elif filename.endswith('.txt'):
+        return '📝'
+    elif filename.endswith('.py'):
+        return '🐍'
+    elif filename.endswith('.yml') or filename.endswith('.yaml'):
+        return '⚙️'
+    elif 'HISTORY' in filename.upper():
+        return '📜'
+    else:
+        return '📦'
 
 
 def main():
@@ -124,6 +144,11 @@ def main():
     files_out = run(f"git diff --name-only {old} {new}", cwd=str(local_dir))
     files = files_out.splitlines() if files_out else []
 
+    if not files:
+        print(f"No file changes detected for {key}")
+        return
+
+    # Collect all changes
     changes = []
     for fpath in files:
         try:
@@ -131,38 +156,72 @@ def main():
             new_file = run(f"git show {new}:{fpath}", cwd=str(local_dir))
             old_ver = get_version(old_file)
             new_ver = get_version(new_file)
-            changes.append(f"{fpath}: {old_ver} => {new_ver}")
+            changes.append({
+                'path': fpath,
+                'old_ver': old_ver,
+                'new_ver': new_ver,
+                'status': 'updated'
+            })
         except Exception:
-            changes.append(f"{fpath}: changed")
+            changes.append({
+                'path': fpath,
+                'old_ver': '?',
+                'new_ver': '?',
+                'status': 'changed'
+            })
 
-    # Determine title and main versions:
-    # Prefer the first changed file that contains a 4-digit version pair; use its filename (without extension) as the title.
-    title_name = None
+    # Find the main version (from first file with version pair)
     main_old = "?"
     main_new = "?"
+    title_name = "Dota 2"
 
-    for idx, c in enumerate(changes):
-        m = re.findall(r"(\d{4}) => (\d{4})", c)
-        if m:
-            main_old, main_new = m[0]
-            if idx < len(files):
-                title_name = Path(files[idx]).stem
+    for idx, change in enumerate(changes):
+        if change['old_ver'] != '?' and change['new_ver'] != '?':
+            main_old, main_new = change['old_ver'], change['new_ver']
+            title_name = Path(files[idx]).stem
             break
 
-    if not title_name:
-        # fallback to the first file's stem or generic name
-        title_name = Path(files[0]).stem if files else "Dota"
-
-    msg = (
-        f"{title_name} Версия {main_old} => {main_new}\n"
-        f"Files changed: {len(files)}\n\n"
-        + ("\n".join(changes) if changes else "No file details")
-        + "\n\nЯ люблю тебя Блю"
+    # Send main header message
+    header_msg = (
+        f"<b>🎮 {title_name}</b>\n"
+        f"<b>Версия: {main_old} → {main_new}</b>\n"
+        f"<b>Файлов изменено: {len(files)}</b>\n"
+        f"━━━━━━━━━━━━━━━━"
     )
+    send_telegram(header_msg)
+    time.sleep(0.5)  # Rate limiting between messages
 
-    send_telegram(msg)
-    print("Sent message:")
-    print(msg)
+    # Send each file change as separate message
+    for idx, change in enumerate(changes, 1):
+        emoji = get_file_emoji(change['path'])
+        file_name = change['path'].split('/')[-1]
+        file_path = change['path']
+        
+        if change['status'] == 'updated' and change['old_ver'] != '?':
+            msg = (
+                f"{emoji} <b>#{idx}</b> {file_name}\n"
+                f"📍 {file_path}\n"
+                f"<b>{change['old_ver']} → {change['new_ver']}</b>"
+            )
+        else:
+            msg = (
+                f"{emoji} <b>#{idx}</b> {file_name}\n"
+                f"📍 {file_path}\n"
+                f"<code>Changed</code>"
+            )
+        
+        send_telegram(msg)
+        time.sleep(0.3)  # Rate limiting between messages
+
+    # Send footer message
+    footer_msg = (
+        f"━━━━━━━━━━━━━━━━\n"
+        f"✅ Проверка завершена\n"
+        f"💙 <i>Я люблю тебя Блю</i>"
+    )
+    send_telegram(footer_msg)
+
+    print(f"Sent {len(changes)} file update messages")
 
     state[key] = new
     save_state(state)
