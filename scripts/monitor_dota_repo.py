@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Monitor a remote git repository and send Telegram notifications when files change.
-Sends each file change as a separate beautiful message with emojis.
+Sends a beautiful combined message with all file updates.
 
 Usage:
   - Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID as repository secrets and expose them to the workflow.
@@ -15,7 +15,6 @@ import json
 import re
 import subprocess
 import requests
-import time
 from pathlib import Path
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -181,47 +180,20 @@ def main():
             title_name = Path(files[idx]).stem
             break
 
-    # Send main header message
-    header_msg = (
-        f"<b>🎮 {title_name}</b>\n"
-        f"<b>Версия: {main_old} → {main_new}</b>\n"
-        f"<b>Файлов изменено: {len(files)}</b>\n"
-        f"━━━━━━━━━━━━━━━━"
-    )
-    send_telegram(header_msg)
-    time.sleep(0.5)  # Rate limiting between messages
-
-    # Send each file change as separate message
-    for idx, change in enumerate(changes, 1):
-        emoji = get_file_emoji(change['path'])
-        file_name = change['path'].split('/')[-1]
-        file_path = change['path']
-        
-        if change['status'] == 'updated' and change['old_ver'] != '?':
-            msg = (
-                f"{emoji} <b>#{idx}</b> {file_name}\n"
-                f"📍 {file_path}\n"
-                f"<b>{change['old_ver']} → {change['new_ver']}</b>"
-            )
-        else:
-            msg = (
-                f"{emoji} <b>#{idx}</b> {file_name}\n"
-                f"📍 {file_path}\n"
-                f"<code>Changed</code>"
-            )
-        
-        send_telegram(msg)
-        time.sleep(0.3)  # Rate limiting between messages
-
-    # Send footer message
-    footer_msg = (
-        f"━━━━━━━━━━━━━━━━\n"
-        f"✅ Проверка завершена\n"
+    # Build the single beautiful message
+    msg_lines = [
+        f"🎮 <b>{title_name}</b>",
+        f"<b>Версия: {main_old} → {main_new}</b>",
+        f"<b>Файлов изменено: {len(files)}</b>",
+        "━━━━━━━━━━━━━━━━",
         f"💙 <i>Я люблю тебя Блю</i>"
-    )
-    send_telegram(footer_msg)
-
-    print(f"Sent {len(changes)} file update messages")
+    ]
+    
+    msg = "\n".join(msg_lines)
+    
+    send_telegram(msg)
+    print("Sent message:")
+    print(msg)
 
     state[key] = new
     save_state(state)
