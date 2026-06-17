@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Monitor a remote git repository and send Telegram notifications when files change.
-Sends the first line from changed files.
+Sends the newly added lines from changed files.
 
 Usage:
   - Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID as repository secrets and expose them to the workflow.
@@ -90,14 +90,18 @@ def ensure_repo_cloned(url, local_dir):
         run("git fetch --all --prune", cwd=str(local))
 
 
-def get_first_line(text):
-    """Extract first non-empty line from text"""
-    lines = text.strip().split('\n')
-    for line in lines:
-        line = line.strip()
-        if line:
-            return line
-    return ""
+def get_added_lines(old_commit, new_commit, file_path, cwd):
+    """Extract newly added lines from git diff"""
+    try:
+        diff_output = run(f"git diff {old_commit} {new_commit} -- {file_path}", cwd=cwd)
+        added_lines = []
+        for line in diff_output.split('\n'):
+            if line.startswith('+') and not line.startswith('+++'):
+                # Remove the leading '+' to get the actual line
+                added_lines.append(line[1:].strip())
+        return added_lines
+    except Exception:
+        return []
 
 
 def main():
@@ -136,18 +140,22 @@ def main():
         print(f"No file changes detected for {key}")
         return
 
-    # Get first line from the first changed file
-    first_line = ""
-    if files:
-        try:
-            new_file_content = run(f"git show {new}:{files[0]}", cwd=str(local_dir))
-            first_line = get_first_line(new_file_content)
-        except Exception:
-            first_line = ""
+    # Get newly added lines from all changed files
+    all_added_lines = []
+    for file_path in files:
+        added_lines = get_added_lines(old, new, file_path, str(local_dir))
+        all_added_lines.extend(added_lines)
+
+    # Get the first newly added non-empty line
+    first_new_line = ""
+    for line in all_added_lines:
+        if line and not line.startswith('@@'):
+            first_new_line = line
+            break
 
     # Build the message
     msg_lines = [
-        first_line if first_line else f"Обновлено {len(files)} файлов",
+        first_new_line if first_new_line else f"Обновлено {len(files)} файлов",
         "━━━━━━━━━━━━━━━━",
         "💙 <i>Я люблю тебя Блю</i>"
     ]
