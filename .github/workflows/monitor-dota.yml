@@ -3,7 +3,7 @@ name: Monitor external Dota2 repo
 on:
   schedule:
     # запуск каждые 15 минут — измените cron при необходимости
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
