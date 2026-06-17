@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Monitor a remote git repository and send Telegram notifications when files change.
-Sends a beautiful combined message with all file updates.
+Sends the first line from changed files.
 
 Usage:
   - Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID as repository secrets and expose them to the workflow.
@@ -65,11 +65,6 @@ def save_state(state):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def get_version(text):
-    found = re.findall(r"\b\d{4}\b", text)
-    return found[0] if found else "?"
-
-
 def send_telegram(msg):
     """Send a single message to Telegram"""
     try:
@@ -95,20 +90,14 @@ def ensure_repo_cloned(url, local_dir):
         run("git fetch --all --prune", cwd=str(local))
 
 
-def get_file_emoji(filename):
-    """Return appropriate emoji based on file type"""
-    if filename.endswith('.json'):
-        return '📄'
-    elif filename.endswith('.txt'):
-        return '📝'
-    elif filename.endswith('.py'):
-        return '🐍'
-    elif filename.endswith('.yml') or filename.endswith('.yaml'):
-        return '⚙️'
-    elif 'HISTORY' in filename.upper():
-        return '📜'
-    else:
-        return '📦'
+def get_first_line(text):
+    """Extract first non-empty line from text"""
+    lines = text.strip().split('\n')
+    for line in lines:
+        line = line.strip()
+        if line:
+            return line
+    return ""
 
 
 def main():
@@ -147,46 +136,20 @@ def main():
         print(f"No file changes detected for {key}")
         return
 
-    # Collect all changes
-    changes = []
-    for fpath in files:
+    # Get first line from the first changed file
+    first_line = ""
+    if files:
         try:
-            old_file = run(f"git show {old}:{fpath}", cwd=str(local_dir))
-            new_file = run(f"git show {new}:{fpath}", cwd=str(local_dir))
-            old_ver = get_version(old_file)
-            new_ver = get_version(new_file)
-            changes.append({
-                'path': fpath,
-                'old_ver': old_ver,
-                'new_ver': new_ver,
-                'status': 'updated'
-            })
+            new_file_content = run(f"git show {new}:{files[0]}", cwd=str(local_dir))
+            first_line = get_first_line(new_file_content)
         except Exception:
-            changes.append({
-                'path': fpath,
-                'old_ver': '?',
-                'new_ver': '?',
-                'status': 'changed'
-            })
+            first_line = ""
 
-    # Find the main version (from first file with version pair)
-    main_old = "?"
-    main_new = "?"
-    title_name = "Dota 2"
-
-    for idx, change in enumerate(changes):
-        if change['old_ver'] != '?' and change['new_ver'] != '?':
-            main_old, main_new = change['old_ver'], change['new_ver']
-            title_name = Path(files[idx]).stem
-            break
-
-    # Build the single beautiful message
+    # Build the message
     msg_lines = [
-        f"🎮 <b>{title_name}</b>",
-        f"<b>Версия: {main_old} → {main_new}</b>",
-        f"<b>Файлов изменено: {len(files)}</b>",
+        first_line if first_line else f"Обновлено {len(files)} файлов",
         "━━━━━━━━━━━━━━━━",
-        f"💙 <i>Я люблю тебя Блю</i>"
+        "💙 <i>Я люблю тебя Блю</i>"
     ]
     
     msg = "\n".join(msg_lines)
