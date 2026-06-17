@@ -135,20 +135,26 @@ def main():
         except Exception:
             changes.append(f"{fpath}: changed")
 
-    versions = []
-    for c in changes:
+    # Determine title and main versions:
+    # Prefer the first changed file that contains a 4-digit version pair; use its filename (without extension) as the title.
+    title_name = None
+    main_old = "?"
+    main_new = "?"
+
+    for idx, c in enumerate(changes):
         m = re.findall(r"(\d{4}) => (\d{4})", c)
         if m:
-            versions.append(m[0])
+            main_old, main_new = m[0]
+            if idx < len(files):
+                title_name = Path(files[idx]).stem
+            break
 
-    if versions:
-        main_old, main_new = versions[0]
-    else:
-        main_old = "?"
-        main_new = "?"
+    if not title_name:
+        # fallback to the first file's stem or generic name
+        title_name = Path(files[0]).stem if files else "Dota"
 
     msg = (
-        f"Dota 2 {main_old} => {main_new}\n"
+        f"{title_name} Версия {main_old} => {main_new}\n"
         f"Files changed: {len(files)}\n\n"
         + ("\n".join(changes) if changes else "No file details")
         + "\n\nЯ люблю тебя Блю"
