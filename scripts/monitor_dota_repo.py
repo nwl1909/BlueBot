@@ -84,10 +84,12 @@ def send_telegram(msg):
 
 
 def ensure_repo_cloned(url, local_dir):
-    if not local_dir.exists():
-        run(f"git clone {url} {local_dir}")
+    # accept either Path or str
+    local = Path(local_dir)
+    if not local.exists():
+        run(f"git clone {url} {local}")
     else:
-        run("git fetch --all --prune", cwd=local_dir)
+        run("git fetch --all --prune", cwd=str(local))
 
 
 def main():
@@ -98,7 +100,7 @@ def main():
     repo_url = sys.argv[1]
     owner, repo = get_repo_name(repo_url)
     local_dir = REPOS_DIR / f"{owner}_{repo}"
-    ensure_repo_cloned(repo_url, str(local_dir))
+    ensure_repo_cloned(repo_url, local_dir)
 
     branch = get_default_remote_branch(str(local_dir))
     remote_ref = f"origin/{branch}" if branch != "HEAD" else "origin/HEAD"
