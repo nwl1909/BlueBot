@@ -31,6 +31,15 @@ REPOS_DIR.mkdir(exist_ok=True)
 # Папка для отслеживания (может быть переопределена)
 WATCH_FOLDER = "steam_api/versions"
 
+# Список игр для исключения из уведомлений (регистронезависимый поиск)
+EXCLUDE_GAMES = [
+    "deadlock",
+    "team fortress 2",
+    "counter strike 2",
+    "team fortress",
+    "counter strike"
+]
+
 
 def run(cmd, cwd=None, check=True):
     return subprocess.check_output(cmd, shell=True, text=True, cwd=cwd).strip()
@@ -107,6 +116,15 @@ def get_added_lines(old_commit, new_commit, file_path, cwd):
         return []
 
 
+def should_filter_out(text):
+    """Проверяет, содержит ли текст названия исключённых игр"""
+    text_lower = text.lower()
+    for game in EXCLUDE_GAMES:
+        if game in text_lower:
+            return True
+    return False
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python scripts/monitor_dota_repo.py <git_repo_url> [watch_folder]", file=sys.stderr)
@@ -154,12 +172,22 @@ def main():
         added_lines = get_added_lines(old, new, file_path, str(local_dir))
         all_added_lines.extend(added_lines)
 
-    # Get the first newly added non-empty line
+    # Фильтруем исключённые игры
+    filtered_lines = [line for line in all_added_lines if not should_filter_out(line)]
+
+    # Get the first newly added non-empty line (после фильтрации)
     first_new_line = ""
-    for line in all_added_lines:
+    for line in filtered_lines:
         if line and not line.startswith('@@'):
             first_new_line = line
             break
+
+    # Если после фильтрации не осталось строк, пропускаем уведомление
+    if not first_new_line and not filtered_lines:
+        print(f"All changes filtered out (excluded games detected): {key}")
+        state[key] = new
+        save_state(state)
+        return
 
     # Build the message with folder info
     msg_lines = [
