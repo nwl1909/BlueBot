@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Monitor a remote git repository and send Telegram notifications when files change.
-Sends the newly added lines from changed files.
+Sends the newly added lines from changed files in a specific folder.
 
 Usage:
   - Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID as repository secrets and expose them to the workflow.
@@ -27,6 +27,9 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
 STATE_FILE = Path("repos_state.json")
 REPOS_DIR = Path("repos")
 REPOS_DIR.mkdir(exist_ok=True)
+
+# Папка для отслеживания (может быть переопределена)
+WATCH_FOLDER = "steam_api/versions"
 
 
 def run(cmd, cwd=None, check=True):
@@ -106,10 +109,14 @@ def get_added_lines(old_commit, new_commit, file_path, cwd):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python scripts/monitor_dota_repo.py <git_repo_url>", file=sys.stderr)
+        print("Usage: python scripts/monitor_dota_repo.py <git_repo_url> [watch_folder]", file=sys.stderr)
         sys.exit(2)
 
     repo_url = sys.argv[1]
+    
+    # Если передана папка как второй аргумент, используем её
+    watch_folder = sys.argv[2] if len(sys.argv) > 2 else WATCH_FOLDER
+    
     owner, repo = get_repo_name(repo_url)
     local_dir = REPOS_DIR / f"{owner}_{repo}"
     ensure_repo_cloned(repo_url, local_dir)
@@ -120,7 +127,7 @@ def main():
     new = run(f"git rev-parse {remote_ref}", cwd=str(local_dir))
 
     state = load_state()
-    key = f"{owner}/{repo}"
+    key = f"{owner}/{repo}/{watch_folder}"
     old = state.get(key)
 
     if not old:
@@ -133,7 +140,8 @@ def main():
         print(f"No changes for {key}")
         return
 
-    files_out = run(f"git diff --name-only {old} {new}", cwd=str(local_dir))
+    # Получаем только изменения в нужной папке
+    files_out = run(f"git diff --name-only {old} {new} -- {watch_folder}", cwd=str(local_dir))
     files = files_out.splitlines() if files_out else []
 
     if not files:
@@ -153,10 +161,12 @@ def main():
             first_new_line = line
             break
 
-    # Build the message
+    # Build the message with folder info
     msg_lines = [
+        f"🔔 <b>Обновление: {watch_folder}</b>",
         first_new_line if first_new_line else f"Обновлено {len(files)} файлов",
         "━━━━━━━━━━━━━━━━",
+        f"📦 <code>{owner}/{repo}</code>",
         "💙 <i>Я люблю тебя Блю</i>"
     ]
     
