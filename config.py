@@ -1,23 +1,21 @@
 import os
 
-# GitHub
-
 OWNER = "muk-as"
-REPO = "DOTA2_WEB"
 
-TRACK_FOLDER = "dota2_web/steam_api"
+REPO = "DOTA2_WEB"
 
 BRANCH = "master"
 
-# Telegram
+TRACK_FOLDER = "dota2_web/steam_api"
 
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# State
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 STATE_FILE = "state.json"
 
-# GitHub API
+STATE_BRANCH = "bot-state"
 
-GITHUB_API = "https://api.github.com"
+STATE_NAME = "state.json"
+
+MESSAGE_SUFFIX = "💙 Я люблю тебя Блю"
