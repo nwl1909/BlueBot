@@ -133,92 +133,72 @@ def make_message(file_name, old, new, date):
 
 
 # --------------------------------------------------------
-# Main
+# Main FIXED VERSION
 # --------------------------------------------------------
 
 state = load_state()
 
 latest = github.latest_commit(BRANCH)
-
 latest_sha = latest["sha"]
 
-
 if state["last_commit"] == latest_sha:
-
     print("No updates.")
-
     quit()
 
+old_sha = state["last_commit"]
 
-commit = github.commit(latest_sha)
+if not old_sha:
+    old_sha = latest["parents"][0]["sha"]
 
-files = commit["files"]
+compare = github.compare(old_sha, latest_sha)
 
+commits = compare.get("commits", [])
 
-for file in files:
+print(f"Found commits: {len(commits)}")
 
-    path = file["filename"]
+for commit in commits:
 
-    if not path.startswith(TRACK_FOLDER):
+    sha = commit["sha"]
 
-        continue
+    commit_data = github.commit(sha)
 
-    previous_sha = commit["parents"][0]["sha"]
+    files = commit_data.get("files", [])
 
-    try:
+    for file in files:
 
-        old_text = github.raw(
+        path = file["filename"]
+
+        if not path.startswith(TRACK_FOLDER):
+            continue
+
+        try:
+            old_text = github.raw(path, commit["parents"][0]["sha"])
+            new_text = github.raw(path, sha)
+
+        except Exception as e:
+            print("RAW ERROR:", e)
+            continue
+
+        old_version = find_version(old_text)
+        new_version = find_version(new_text)
+
+        if old_version is None or new_version is None:
+            continue
+
+        if old_version == new_version:
+            continue
+
+        msg = make_message(
             path,
-            previous_sha
+            old_version,
+            new_version,
+            format_time(commit["commit"]["author"]["date"])
         )
 
-        new_text = github.raw(
-            path,
-            latest_sha
-        )
-
-    except Exception as e:
-
-        print(e)
-
-        continue
-
-    old_version = find_version(old_text)
-
-    new_version = find_version(new_text)
-
-    if old_version is None:
-
-        continue
-
-    if new_version is None:
-
-        continue
-
-    if old_version == new_version:
-
-        continue
-
-    msg = make_message(
-
-        path,
-
-        old_version,
-
-        new_version,
-
-        format_time(
-            commit["commit"]["author"]["date"]
-        )
-
-    )
-
-    telegram.send(msg)
-
-    print(msg)
+        telegram.send(msg)
+        print(msg)
 
 state["last_commit"] = latest_sha
-
 save_state(state)
 
 print("Done.")
