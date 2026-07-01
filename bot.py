@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from telegram_api import Telegram
 from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 
-Telegram(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID).send("✅ Тест GitHub Actions")
+Telegram(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID).send("✅ Тест ЖОПЫ ГОЛУБИНА")
 
 from config import (
     OWNER,
