@@ -1,0 +1,48 @@
+name: Check Dota 2 version updates
+
+on:
+  schedule:
+    # Минимальный интервал, который реально поддерживает GitHub Actions — 5 минут.
+    # Фактический запуск может задерживаться на пару минут в часы пиковой нагрузки GitHub.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [check-now]
+
+# Не даём двум запускам работать параллельно, чтобы не было гонки при коммите state.json
+concurrency:
+  group: dota2-tracker
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run update check
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python check_updates.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "dota2-tracker-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if ! git diff --quiet -- state.json; then
+            git add state.json
+            git commit -m "chore: update state [skip ci]"
+            git push
+          else
+            echo "state.json не изменился, коммитить нечего"
+          fi
