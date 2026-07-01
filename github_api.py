@@ -1,5 +1,7 @@
 import requests
 
+API = "https://api.github.com"
+
 
 class GitHub:
 
@@ -8,30 +10,105 @@ class GitHub:
         self.owner = owner
         self.repo = repo
 
-    def request(self, url):
+        self.headers = {
+            "Accept": "application/vnd.github+json"
+        }
 
-        return requests.get(
+    # -------------------------------------
+
+    def get(self, url):
+
+        r = requests.get(
             url,
-            headers={
-                "Accept": "application/vnd.github+json"
-            },
+            headers=self.headers,
             timeout=30
-        ).json()
+        )
+
+        r.raise_for_status()
+
+        return r.json()
+
+    # -------------------------------------
 
     def latest_commit(self, branch):
 
-        url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{branch}"
+        url = (
+            f"{API}/repos/"
+            f"{self.owner}/"
+            f"{self.repo}/"
+            f"commits/{branch}"
+        )
 
-        return self.request(url)
+        return self.get(url)
+
+    # -------------------------------------
 
     def commit(self, sha):
 
-        url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{sha}"
+        url = (
+            f"{API}/repos/"
+            f"{self.owner}/"
+            f"{self.repo}/"
+            f"commits/{sha}"
+        )
 
-        return self.request(url)
+        return self.get(url)
+
+    # -------------------------------------
+
+    def compare(self, old_sha, new_sha):
+
+        url = (
+            f"{API}/repos/"
+            f"{self.owner}/"
+            f"{self.repo}/"
+            f"compare/"
+            f"{old_sha}...{new_sha}"
+        )
+
+        return self.get(url)
+
+    # -------------------------------------
 
     def raw(self, path, ref):
 
-        url = f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{ref}/{path}"
+        url = (
+            "https://raw.githubusercontent.com/"
+            f"{self.owner}/"
+            f"{self.repo}/"
+            f"{ref}/"
+            f"{path}"
+        )
 
-        return requests.get(url, timeout=30).text
+        r = requests.get(
+            url,
+            timeout=30
+        )
+
+        r.raise_for_status()
+
+        return r.text
+
+    # -------------------------------------
+
+    def commits_between(self, old_sha, new_sha):
+
+        data = self.compare(
+            old_sha,
+            new_sha
+        )
+
+        commits = data.get(
+            "commits",
+            []
+        )
+
+        result = []
+
+        for commit in commits:
+
+            result.append(
+                commit["sha"]
+            )
+
+        return result
