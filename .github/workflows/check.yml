@@ -2,11 +2,22 @@ name: Dota2 Tracker
 
 on:
   schedule:
-    - cron: "* * * * *"
+    # GitHub Actions не поддерживает запуск чаще, чем раз в 5 минут -
+    # расписание "* * * * *" (каждую минуту) GitHub либо отклоняет, либо
+    # сильно занижает частоту запуска без предупреждений. "*/5 * * * *"
+    # - это реально работающий минимум.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# Не даём запускам накладываться друг на друга - иначе два параллельных
+# запуска могут одновременно пытаться сделать `git push` state.json и
+# один из них будет падать с конфликтом.
+concurrency:
+  group: dota2-tracker
+  cancel-in-progress: false
 
 jobs:
   tracker:
@@ -32,6 +43,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python bot.py
 
@@ -44,4 +56,5 @@ jobs:
 
           git diff --cached --quiet || git commit -m "Update tracker state"
 
+          git pull --rebase origin ${{ github.ref_name }}
           git push
