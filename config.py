@@ -45,4 +45,5 @@ BLOCKED_KEYWORDS = [
     "Counter Strike",
     "Unknown App",
     "Team Fortress 2",
+    "Deadlock",
 ]
