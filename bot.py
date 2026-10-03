@@ -1,4 +1,5 @@
 import difflib
+import html
 import json
 import re
 import sys
@@ -146,10 +147,102 @@ def added_lines(old_text, new_text):
     return result
 
 
+# --------------------------------------------------------
+# Красивое оформление сообщений (Telegram, parse_mode=HTML)
+# --------------------------------------------------------
+
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC\+3\)$")
+HEAD_RE = re.compile(r"^(\d+) - (.+)$")
+FIELD_RE = re.compile(r"^\[(\w)\]\s*(.+?)\s*=>\s*(.+)$")
+
+
+def pick_icon(name, appid=None):
+
+    # Эмодзи из apps.json (если задан) имеет приоритет
+    if appid:
+        custom = parse_emoji(appid)
+        if custom:
+            return custom
+
+    lowered = name.lower()
+
+    if "server" in lowered:
+        return "🖥"
+
+    if "experimental" in lowered or "staging" in lowered or "test" in lowered:
+        return "🧪"
+
+    return "🎮"
+
+
+def render_message(name, appid, fields, date):
+
+    """
+    fields - список (метка, старое, новое), метки: v - версия,
+    s - размер, h - хэш.
+    """
+
+    lines = []
+
+    icon = pick_icon(name, appid)
+    lines.append(f"{icon} <b>{html.escape(name)}</b>")
+
+    if appid:
+        lines.append(f"🆔 <code>{html.escape(str(appid))}</code>")
+
+    labels = {
+        "v": "🔄 Версия",
+        "s": "📦 Размер",
+        "h": "🔑 Хэш",
+    }
+
+    for key, old, new in fields:
+        label = labels.get(key, f"▫️ {key}")
+        lines.append(
+            f"{label}: <code>{html.escape(str(old))}</code>"
+            f" ➜ <b>{html.escape(str(new))}</b>"
+        )
+
+    if date:
+        lines.append(f"🕒 {html.escape(date)}")
+
+    body = "\n".join(lines)
+
+    return f"{body}\n\n{html.escape(MESSAGE_SUFFIX)}"
+
+
 def make_history_message(line):
 
-    return f"{line}\n\n{MESSAGE_SUFFIX}"
+    parts = [p.strip() for p in line.split(" | ")]
 
+    head = parts[0]
+    appid = None
+    name = head
+
+    m = HEAD_RE.match(head)
+
+    if m:
+        appid, name = m.group(1), m.group(2)
+
+    fields = []
+    date = ""
+
+    for part in parts[1:]:
+
+        if DATE_RE.match(part):
+            date = part
+            continue
+
+        fm = FIELD_RE.match(part)
+
+        if fm:
+            fields.append((fm.group(1), fm.group(2), fm.group(3)))
+
+    # Строка в незнакомом формате - шлём как есть, просто аккуратно
+    if not fields:
+        return f"{html.escape(line)}\n\n{html.escape(MESSAGE_SUFFIX)}"
+
+    return render_message(name, appid, fields, date)
 
 
 # --------------------------------------------------------
@@ -171,14 +264,12 @@ def make_message(file_name, old, new, date):
 
     appid = parse_appid(file_name)
     name = parse_name(appid)
-    emoji = parse_emoji(appid)
 
-    header = f"{emoji} {appid} - {name}" if emoji else f"{appid} - {name}"
-
-    return (
-        f"{header} | [v] {old} => {new} | {date} (UTC+3)\n"
-        "\n"
-        "💙 Я люблю тебя Блю"
+    return render_message(
+        name,
+        appid,
+        [("v", old, new)],
+        f"{date} (UTC+3)"
     )
 
 
@@ -269,12 +360,12 @@ def main():
 
                     msg = make_history_message(line)
 
-                    if is_blocked(msg):
+                    if is_blocked(line):
                         print(f"Пропущено (стоп-слово): {line}")
                         continue
 
                     try:
-                        telegram.send(msg)
+                        telegram.send(msg, parse_mode="HTML")
                         print(msg)
                     except Exception as e:
                         print("TELEGRAM ERROR:", e)
@@ -313,12 +404,12 @@ def main():
                 format_time(commit["commit"]["author"]["date"])
             )
 
-            if is_blocked(msg):
+            if is_blocked(msg) or is_blocked(parse_name(parse_appid(path))):
                 print(f"Пропущено (стоп-слово): {path}")
                 continue
 
             try:
-                telegram.send(msg)
+                telegram.send(msg, parse_mode="HTML")
                 print(msg)
             except Exception as e:
                 print("TELEGRAM ERROR:", e)
