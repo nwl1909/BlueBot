@@ -7,7 +7,7 @@ class Telegram:
         self.token = token
         self.chat_id = chat_id
 
-    def send(self, text):
+    def send(self, text, parse_mode=None):
 
         if not self.token or not self.chat_id:
             raise RuntimeError(
@@ -17,13 +17,18 @@ class Telegram:
 
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
 
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "disable_web_page_preview": True
+        }
+
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+
         r = requests.post(
             url,
-            json={
-                "chat_id": self.chat_id,
-                "text": text,
-                "disable_web_page_preview": True
-            },
+            json=payload,
             timeout=30
         )
 
