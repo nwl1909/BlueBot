@@ -18,6 +18,9 @@ RAW_URL = "https://raw.githubusercontent.com/muk-as/DOTA2_WEB/master/steam_api/_
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
 SIGNATURE = "💙 Я люблю тебя Блю"
 
+# Строки, содержащие любое из этих слов (без учёта регистра), не отправляются
+BLOCKED_KEYWORDS = ["Deadlock"]
+
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -103,6 +106,9 @@ def main() -> int:
 
     all_ok = True
     for line in new_lines:
+        if any(k.lower() in line.lower() for k in BLOCKED_KEYWORDS):
+            print(f"Пропущено (стоп-слово): {line}")
+            continue
         message = f"{line}\n{SIGNATURE}"
         ok = send_telegram_message(message)
         all_ok = all_ok and ok
