@@ -22,7 +22,7 @@ from config import (
 
 from github_api import GitHub
 from telegram_api import Telegram
-from parser import parse_appid, parse_name, parse_emoji
+from parser import parse_appid, parse_name
 
 
 github = GitHub(OWNER, REPO, GITHUB_TOKEN)
@@ -148,7 +148,7 @@ def added_lines(old_text, new_text):
 
 
 # --------------------------------------------------------
-# Красивое оформление сообщений (Telegram, parse_mode=HTML)
+# Оформление сообщений (Telegram, parse_mode=HTML)
 # --------------------------------------------------------
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \(UTC\+3\)$")
@@ -156,57 +156,43 @@ HEAD_RE = re.compile(r"^(\d+) - (.+)$")
 FIELD_RE = re.compile(r"^\[(\w)\]\s*(.+?)\s*=>\s*(.+)$")
 
 
-def pick_icon(name, appid=None):
-
-    # Эмодзи из apps.json (если задан) имеет приоритет
-    if appid:
-        custom = parse_emoji(appid)
-        if custom:
-            return custom
-
-    lowered = name.lower()
-
-    if "server" in lowered:
-        return "🖥"
-
-    if "experimental" in lowered or "staging" in lowered or "test" in lowered:
-        return "🧪"
-
-    return "🎮"
+LABELS = {
+    "v": "v",
+    "s": "размер",
+    "h": "хэш",
+}
 
 
 def render_message(name, appid, fields, date):
 
     """
+    Всё в одну строчку:
+
+        <b>Dota 2</b> 570 | v 123 → 456 | 2026-10-05 17:40:12 UTC+3
+
+        💙 Я люблю тебя Блю
+
     fields - список (метка, старое, новое), метки: v - версия,
     s - размер, h - хэш.
     """
 
-    lines = []
-
-    icon = pick_icon(name, appid)
-    lines.append(f"{icon} <b>{html.escape(name)}</b>")
+    head = f"<b>{html.escape(name)}</b>"
 
     if appid:
-        lines.append(f"🆔 <code>{html.escape(str(appid))}</code>")
+        head += f" {html.escape(str(appid))}"
 
-    labels = {
-        "v": "🔄 Версия",
-        "s": "📦 Размер",
-        "h": "🔑 Хэш",
-    }
+    parts = [head]
 
     for key, old, new in fields:
-        label = labels.get(key, f"▫️ {key}")
-        lines.append(
-            f"{label}: <code>{html.escape(str(old))}</code>"
-            f" ➜ <b>{html.escape(str(new))}</b>"
+        label = LABELS.get(key, key)
+        parts.append(
+            f"{label} {html.escape(str(old))} → {html.escape(str(new))}"
         )
 
     if date:
-        lines.append(f"🕒 {html.escape(date)}")
+        parts.append(html.escape(date.replace("(UTC+3)", "UTC+3")))
 
-    body = "\n".join(lines)
+    body = " | ".join(parts)
 
     return f"{body}\n\n{html.escape(MESSAGE_SUFFIX)}"
 
